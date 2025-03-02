@@ -8,7 +8,12 @@ namespace OrderService.Api.Controllers;
 [Route("api/[controller]")]
 public class OrderController : ControllerBase
 {
-    private readonly string connectionString = "YourConnectionStringHere";
+    private readonly string connectionString;
+
+    public OrderController(IConfiguration configuration)
+    {
+        connectionString = configuration.GetConnectionString("DefaultConnection");
+    }
 
     [HttpGet]
     public IActionResult GetOrders()
@@ -17,7 +22,7 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            var command = new SqlCommand("SELECT * FROM Orders", connection);
+            var command = new SqlCommand("SELECT * FROM [Order].Orders", connection);
             using (var reader = command.ExecuteReader())
             {
                 while (reader.Read())
@@ -47,7 +52,7 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            var command = new SqlCommand("SELECT * FROM Orders WHERE Id = @Id", connection);
+            var command = new SqlCommand("SELECT * FROM [Order].Orders WHERE Id = @Id", connection);
             command.Parameters.AddWithValue("@Id", id);
             using (var reader = command.ExecuteReader())
             {
@@ -94,11 +99,21 @@ public class OrderController : ControllerBase
             return BadRequest("New order must have status of Pending");
         }
 
+        if (order.OrderItems == null || order.OrderItems.Count == 0)
+        {
+            return BadRequest("Order must have at least one item");
+        }
+
+        if (order.OrderItems.Any(x => x.Quantity <= 0))
+        {
+            return BadRequest("Quantity of each item must be greater than 0");
+        }
+
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
             var command = new SqlCommand(
-                "INSERT INTO Orders (OrderNumber, OrderDate, CustomerName, CustomerAddress, CustomerEmail, CustomerPhone, Status) " +
+                "INSERT INTO [Order].Orders (OrderNumber, OrderDate, CustomerName, CustomerAddress, CustomerEmail, CustomerPhone, Status) " +
                 "VALUES (@OrderNumber, @OrderDate, @CustomerName, @CustomerAddress, @CustomerEmail, @CustomerPhone, @Status); " +
                 "SELECT SCOPE_IDENTITY();", connection);
             command.Parameters.AddWithValue("@OrderNumber", order.OrderNumber);
@@ -109,6 +124,18 @@ public class OrderController : ControllerBase
             command.Parameters.AddWithValue("@CustomerPhone", order.CustomerPhone);
             command.Parameters.AddWithValue("@Status", (int)order.Status);
             order.Id = Convert.ToInt32(command.ExecuteScalar());
+
+            foreach (var item in order.OrderItems)
+            {
+                var itemCommand = new SqlCommand(
+                    "INSERT INTO [Order].OrderItems (OrderId, ProductCode, ProductName, Quantity) " +
+                    "VALUES (@OrderId, @ProductCode, @ProductName, @Quantity);", connection);
+                itemCommand.Parameters.AddWithValue("@OrderId", order.Id);
+                itemCommand.Parameters.AddWithValue("@ProductCode", item.ProductCode);
+                itemCommand.Parameters.AddWithValue("@ProductName", item.ProductName);
+                itemCommand.Parameters.AddWithValue("@Quantity", item.Quantity);
+                itemCommand.ExecuteNonQuery();
+            }
         }
         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
     }
@@ -132,7 +159,7 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            var command = new SqlCommand("SELECT * FROM Orders WHERE Id = @Id", connection);
+            var command = new SqlCommand("SELECT * FROM [Order].Orders WHERE Id = @Id", connection);
             command.Parameters.AddWithValue("@Id", id);
             using (var reader = command.ExecuteReader())
             {
@@ -148,7 +175,6 @@ public class OrderController : ControllerBase
                         CustomerEmail = reader.GetString(5),
                         CustomerPhone = reader.GetString(6),
                         Status = (OrderStatus)reader.GetInt32(7),
-                        // Assuming OrderItems is handled separately
                     };
                 }
             }
@@ -160,13 +186,12 @@ public class OrderController : ControllerBase
         {
             return BadRequest("Cannot cancel an order that has been shipped or delivered");
         }    
-        
 
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
             var command = new SqlCommand(
-                "UPDATE Orders SET OrderNumber = @OrderNumber, OrderDate = @OrderDate, CustomerName = @CustomerName, " +
+                "UPDATE [Order].Orders SET OrderNumber = @OrderNumber, OrderDate = @OrderDate, CustomerName = @CustomerName, " +
                 "CustomerAddress = @CustomerAddress, CustomerEmail = @CustomerEmail, CustomerPhone = @CustomerPhone, Status = @Status " +
                 "WHERE Id = @Id", connection);
             command.Parameters.AddWithValue("@Id", id);
@@ -178,6 +203,22 @@ public class OrderController : ControllerBase
             command.Parameters.AddWithValue("@CustomerPhone", order.CustomerPhone);
             command.Parameters.AddWithValue("@Status", (int)order.Status);
             command.ExecuteNonQuery();
+
+            var deleteItemsCommand = new SqlCommand("DELETE FROM [Order].OrderItems WHERE OrderId = @OrderId", connection);
+            deleteItemsCommand.Parameters.AddWithValue("@OrderId", id);
+            deleteItemsCommand.ExecuteNonQuery();
+
+            foreach (var item in order.OrderItems)
+            {
+                var itemCommand = new SqlCommand(
+                    "INSERT INTO [Order].OrderItems (OrderId, ProductCode, ProductName, Quantity) " +
+                    "VALUES (@OrderId, @ProductCode, @ProductName, @Quantity);", connection);
+                itemCommand.Parameters.AddWithValue("@OrderId", id);
+                itemCommand.Parameters.AddWithValue("@ProductCode", item.ProductCode);
+                itemCommand.Parameters.AddWithValue("@ProductName", item.ProductName);
+                itemCommand.Parameters.AddWithValue("@Quantity", item.Quantity);
+                itemCommand.ExecuteNonQuery();
+            }
         }
         return NoContent();
     }
@@ -188,7 +229,12 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            var command = new SqlCommand("DELETE FROM Orders WHERE Id = @Id", connection);
+            
+            var deleteItemsCommand = new SqlCommand("DELETE FROM [Order].OrderItems WHERE OrderId = @OrderId", connection);
+            deleteItemsCommand.Parameters.AddWithValue("@OrderId", id);
+            deleteItemsCommand.ExecuteNonQuery();
+
+            var command = new SqlCommand("DELETE FROM [Order].Orders WHERE Id = @Id", connection);
             command.Parameters.AddWithValue("@Id", id);
             command.ExecuteNonQuery();
         }
@@ -201,7 +247,7 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            var command = new SqlCommand("SELECT * FROM OrderItems WHERE OrderId = @OrderId", connection);
+            var command = new SqlCommand("SELECT * FROM [Order].OrderItems WHERE OrderId = @OrderId", connection);
             command.Parameters.AddWithValue("@OrderId", orderId);
             using (var reader = command.ExecuteReader())
             {
@@ -214,7 +260,6 @@ public class OrderController : ControllerBase
                         ProductCode = reader.GetString(2),
                         ProductName = reader.GetString(3),
                         Quantity = reader.GetInt32(4),
-                        Price = reader.GetDecimal(5)
                     });
                 }
             }
