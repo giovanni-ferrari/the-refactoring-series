@@ -8,7 +8,7 @@ namespace OrderService.Api.Controllers;
 [Route("api/[controller]")]
 public class OrderController : ControllerBase
 {
-    private readonly string connectionString;
+    private readonly string? connectionString;
 
     public OrderController(IConfiguration configuration)
     {
