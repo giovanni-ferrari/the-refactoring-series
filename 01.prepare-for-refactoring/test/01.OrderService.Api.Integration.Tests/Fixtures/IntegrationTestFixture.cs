@@ -6,6 +6,7 @@ public class IntegrationTestFixture : IFixture, IAsyncDisposable
 {
     public OrderServiceFixture? Factory { get; private set; }
     public HttpClient? Client { get; private set; }
+    public bool Initialized { get; private set; }
     public SqlServerFixture SqlServerFixture { get; }
     
     
@@ -25,5 +26,6 @@ public class IntegrationTestFixture : IFixture, IAsyncDisposable
         await SqlServerFixture.StartAsync();
         Factory = new OrderServiceFixture(SqlServerFixture.GetConnectionString());  
         Client = Factory.CreateClient();
+        Initialized = true;
     }
 }
