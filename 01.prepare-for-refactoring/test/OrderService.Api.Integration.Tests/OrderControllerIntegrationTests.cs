@@ -287,8 +287,27 @@ public class OrderControllerIntegrationTests : IClassFixture<IntegrationTestFixt
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Theory]
+    [InlineData(OrderStatus.Processing)]
+    [InlineData(OrderStatus.Delivered)]
+    [InlineData(OrderStatus.Shipped)]
+    [InlineData(OrderStatus.Cancelled)]
+    public async Task UpdateOrder_WhenStatusIsNotPending_ThenResturnsBadRequest(OrderStatus orderStatus)
+    {
+        // Arrange
+        var order = (await MockOrders(1)).First();
+        await UpdateOrderStatus(order.Id, OrderStatus.Pending);
+        order.Status = orderStatus;
+
+        // Act
+        var response = await fixture.Client!.PutAsJsonAsync($"/api/order/{order.Id}", order);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
-    public async Task UpdateOrder_WhenOrderExistsAndDataArValid_ThenOrderIsUpdatedAndReturnsOk()
+    public async Task UpdateOrder_WhenOrderExistsAndDataAreValid_ThenOrderIsUpdatedAndReturnsOk()
     {
         // Arrange
         Order expectedOrder = (await MockOrders(1)).First();
