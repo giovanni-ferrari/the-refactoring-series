@@ -35,7 +35,7 @@ BEGIN
         ProductCode NVARCHAR(50) NOT NULL,
         ProductName NVARCHAR(100) NOT NULL,
         Quantity INT NOT NULL,
-        FOREIGN KEY (OrderId) REFERENCES [Order].Orders(Id)
+        FOREIGN KEY (OrderId) REFERENCES [Order].Orders(Id) ON DELETE CASCADE
     );
 END
 GO

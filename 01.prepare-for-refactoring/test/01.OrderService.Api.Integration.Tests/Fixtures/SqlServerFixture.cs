@@ -10,19 +10,23 @@ namespace OrderService.Api.Integration.Tests.Fixtures;
 public class SqlServerFixture : IFixture, IAsyncDisposable
 {
     private readonly MsSqlContainer _sqlContainer;
+    private const string DATABASE_PASSWORD = "yourStrong(!)Password";
+    private const string DATABASE_IMAGE = "mcr.microsoft.com/mssql/server:2022-latest";
+    private const string DATABASE_NAME = "OrderService";
+    private const string DATABASE_CREATE_SCRIPT = "order-service.sql";
 
     public SqlServerFixture()
     {
         _sqlContainer = new MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-            .WithPassword("yourStrong(!)Password")
+            .WithImage(DATABASE_IMAGE)
+            .WithPassword(DATABASE_PASSWORD)
             .Build();
     }
 
     public string GetConnectionString()
     {
         SqlConnectionStringBuilder builder = new(_sqlContainer.GetConnectionString());
-        builder.InitialCatalog = "OrderService";
+        builder.InitialCatalog = DATABASE_NAME;
         return builder.ConnectionString;
     }
 
@@ -36,7 +40,7 @@ public class SqlServerFixture : IFixture, IAsyncDisposable
 
     private async Task InitializeDatabaseAsync()
     {
-        var scriptPath = Path.Combine(AppContext.BaseDirectory, "order-service.sql");
+        var scriptPath = Path.Combine(AppContext.BaseDirectory, DATABASE_CREATE_SCRIPT);
         var script = await File.ReadAllTextAsync(scriptPath);
 
         // Split the script on GO statements

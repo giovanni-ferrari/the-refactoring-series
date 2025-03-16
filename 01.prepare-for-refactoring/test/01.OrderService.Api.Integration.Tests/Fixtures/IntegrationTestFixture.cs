@@ -1,12 +1,9 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-
 namespace OrderService.Api.Integration.Tests.Fixtures;
 
-public class IntegrationTestFixture : IFixture, IAsyncDisposable
+public sealed class IntegrationTestFixture : IFixture, IAsyncDisposable, IAsyncLifetime
 {
-    public OrderServiceFixture? Factory { get; private set; }
+    public OrderServiceFixture? OrderServiceFixture { get; private set; }
     public HttpClient? Client { get; private set; }
-    public bool Initialized { get; private set; }
     public SqlServerFixture SqlServerFixture { get; }
     
     
@@ -16,7 +13,7 @@ public class IntegrationTestFixture : IFixture, IAsyncDisposable
     }
     public async ValueTask DisposeAsync()
     {
-        await (Factory?.DisposeAsync() ?? ValueTask.CompletedTask);
+        await (OrderServiceFixture?.DisposeAsync() ?? ValueTask.CompletedTask);
         Client?.Dispose();
         await SqlServerFixture.DisposeAsync();
     }
@@ -24,8 +21,19 @@ public class IntegrationTestFixture : IFixture, IAsyncDisposable
     public async Task StartAsync()
     {
         await SqlServerFixture.StartAsync();
-        Factory = new OrderServiceFixture(SqlServerFixture.GetConnectionString());  
-        Client = Factory.CreateClient();
-        Initialized = true;
+        OrderServiceFixture = new OrderServiceFixture(SqlServerFixture.GetConnectionString());  
+        Client = OrderServiceFixture.CreateClient();
+}
+
+    public async Task InitializeAsync()
+    {
+        await StartAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await SqlServerFixture.DisposeAsync();
+        await (OrderServiceFixture?.DisposeAsync() ?? ValueTask.CompletedTask);
+        Client?.Dispose();
     }
 }
