@@ -212,15 +212,15 @@ public class OrderController : ControllerBase
             {
                 var itemCommand = new SqlCommand(
                     "INSERT INTO [Order].OrderItems (OrderId, ProductCode, ProductName, Quantity) " +
-                    "VALUES (@OrderId, @ProductCode, @ProductName, @Quantity);", connection);
+                    "VALUES (@OrderId, @ProductCode, @ProductName, @Quantity); SELECT SCOPE_IDENTITY();", connection);
                 itemCommand.Parameters.AddWithValue("@OrderId", id);
                 itemCommand.Parameters.AddWithValue("@ProductCode", item.ProductCode);
                 itemCommand.Parameters.AddWithValue("@ProductName", item.ProductName);
                 itemCommand.Parameters.AddWithValue("@Quantity", item.Quantity);
-                itemCommand.ExecuteNonQuery();
+                item.Id = Convert.ToInt32(itemCommand.ExecuteScalar());
             }
         }
-        return NoContent();
+        return Ok(order);
     }
 
     [HttpDelete("{id}")]
@@ -229,7 +229,16 @@ public class OrderController : ControllerBase
         using (var connection = new SqlConnection(connectionString))
         {
             connection.Open();
-            
+
+            var checkOrderCommand = new SqlCommand("SELECT COUNT(1) FROM [Order].Orders WHERE Id = @Id", connection);
+            checkOrderCommand.Parameters.AddWithValue("@Id", id);
+            var orderExists = (int)checkOrderCommand.ExecuteScalar() > 0;
+
+            if (!orderExists)
+            {
+                return NotFound();
+            }
+
             var deleteItemsCommand = new SqlCommand("DELETE FROM [Order].OrderItems WHERE OrderId = @OrderId", connection);
             deleteItemsCommand.Parameters.AddWithValue("@OrderId", id);
             deleteItemsCommand.ExecuteNonQuery();
@@ -238,7 +247,7 @@ public class OrderController : ControllerBase
             command.Parameters.AddWithValue("@Id", id);
             command.ExecuteNonQuery();
         }
-        return NoContent();
+        return Ok();
     }
 
     private List<OrderItem> GetOrderItems(int orderId)

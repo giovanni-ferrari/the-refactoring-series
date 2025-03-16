@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\01.OrderService.Api\01.OrderService.Api.csproj" />
+    <ProjectReference Include="..\..\src\OrderService.Api\OrderService.Api.csproj" />
   </ItemGroup>
 
 </Project>

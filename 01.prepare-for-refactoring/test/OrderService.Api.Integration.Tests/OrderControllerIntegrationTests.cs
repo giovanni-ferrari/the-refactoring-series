@@ -243,6 +243,118 @@ public class OrderControllerIntegrationTests : IClassFixture<IntegrationTestFixt
         });
     }
 
+    [Fact]
+    public async Task UpdateOrder_WhenOrderIsNull_ThenReturnsBadRequest()
+    {
+        // Arrange
+        Order? order = null;
+
+        // Act
+        var response = await fixture.Client!.PutAsJsonAsync($"/api/order/{autoFixture.Create<int>()}", order);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_WhenOrderIdDoesNotExists_ThenReturnsInternalServerError()
+    {
+        // Arrange
+        Order order = autoFixture.Build<Order>().Create();
+
+        // Act
+        var response = await fixture.Client!.PutAsJsonAsync($"/api/order/{order.Id}", order);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Shipped)]
+    [InlineData(OrderStatus.Delivered)]
+    public async Task UpdateOrder_WhenOrderIsShippedOrDeliveredAndUpatedRequestCancel_ThenReturnsBadRequest(OrderStatus status)
+    {
+        // Arrange
+        Order order = (await MockOrders(1)).First();
+        await UpdateOrderStatus(order.Id, status);
+
+        order.Status = OrderStatus.Cancelled;
+
+        // Act
+        var response = await fixture.Client!.PutAsJsonAsync($"/api/order/{autoFixture.Create<int>()}", order);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_WhenOrderExistsAndDataArValid_ThenOrderIsUpdatedAndReturnsOk()
+    {
+        // Arrange
+        Order expectedOrder = (await MockOrders(1)).First();
+        expectedOrder.Status = OrderStatus.Pending;
+        await UpdateOrderStatus(expectedOrder.Id, OrderStatus.Pending);
+        await MockOrderItems([expectedOrder]);
+
+        Order updatedOrder = autoFixture.Build<Order>()
+            .With(x => x.Id, expectedOrder.Id)
+            .With(x => x.Status, OrderStatus.Pending)
+            .With(x => x.OrderNumber, autoFixture.Create<string>().PadRight(20).Substring(0, 20))
+            .With(x => x.CustomerPhone, autoFixture.Create<string>().PadRight(20).Substring(0, 20))
+            .Create();
+
+        // Act
+        var response = await fixture.Client!.PutAsJsonAsync($"/api/order/{expectedOrder.Id}", updatedOrder);
+        response.EnsureSuccessStatusCode();
+
+        var order = await response.Content.ReadFromJsonAsync<Order>();
+
+        // Assert
+
+        order.Should().NotBeNull();
+        order.Should().BeEquivalentTo(updatedOrder, options =>
+        {
+            options.Using<DateTime>(ctx => ctx.Subject.Should().BeCloseTo(ctx.Expectation, TimeSpan.FromSeconds(1))).WhenTypeIs<DateTime>();
+            options.Excluding(o => o.OrderItems);
+            return options;
+        });
+
+        order.OrderItems.Should().BeEquivalentTo(updatedOrder.OrderItems, options =>
+        {
+            options.Excluding(o => o.Id);
+            return options;
+        });
+
+    }
+
+    [Fact]
+    public async Task DeleteOrder_WhenOrderIdDoesNotExists_ThenReturnsNotFound()
+    {
+        // Arrange
+        var orderId = 1;
+
+        // Act
+        var response = await fixture.Client!.DeleteAsync($"/api/order/{orderId}");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]  
+    public async Task DeleteOrder_WhenOrderIdExists_ThenReturnsOk()
+    {
+        // Arrange
+        Order expectedOrder = (await MockOrders(1)).First();
+        await MockOrderItems([expectedOrder]);
+
+        // Act
+        var response = await fixture.Client!.DeleteAsync($"/api/order/{expectedOrder.Id}");
+        response.EnsureSuccessStatusCode();
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     private async Task<IEnumerable<Order>> MockOrders(int n)
     {
         var expectedOrders = autoFixture.Build<Order>()
@@ -253,6 +365,16 @@ public class OrderControllerIntegrationTests : IClassFixture<IntegrationTestFixt
                     .ToList();
         await PersistOrders(expectedOrders);
         return expectedOrders;
+    }
+
+    private async Task UpdateOrderStatus(long orderId, OrderStatus orderStatus)
+    {
+        using var sqlConnection = new SqlConnection(fixture.SqlServerFixture.GetConnectionString());
+        await sqlConnection.OpenAsync();
+        using var command = new SqlCommand($"UPDATE [Order].Orders SET Status = @Status WHERE Id = @Id", sqlConnection);
+        command.Parameters.AddWithValue("@Status", orderStatus);
+        command.Parameters.AddWithValue("@Id", orderId);
+        await command.ExecuteNonQueryAsync();
     }
 
     private async Task MockOrderItems(IEnumerable<Order> expectedOrders)
