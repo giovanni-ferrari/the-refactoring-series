@@ -36,8 +36,6 @@ public class SqlServerFixture : IAsyncLifetime
         await InitializeDatabaseAsync();
     }
 
-    public string ConnectionString => _sqlContainer.GetConnectionString();
-
     private async Task InitializeDatabaseAsync()
     {
         var scriptPath = Path.Combine(AppContext.BaseDirectory, DATABASE_CREATE_SCRIPT);
@@ -48,7 +46,7 @@ public class SqlServerFixture : IAsyncLifetime
             .Split(new[] { "GO" }, StringSplitOptions.RemoveEmptyEntries)
             .Where(batch => !string.IsNullOrWhiteSpace(batch));
 
-        using (var connection = new SqlConnection(ConnectionString))
+        using (var connection = new SqlConnection(_sqlContainer.GetConnectionString()))
         {
             await connection.OpenAsync();
             foreach (var batch in batches)
