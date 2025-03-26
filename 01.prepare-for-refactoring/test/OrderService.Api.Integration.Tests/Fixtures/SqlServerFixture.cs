@@ -7,7 +7,7 @@ namespace OrderService.Api.Integration.Tests.Fixtures;
 /// Represents a fixture that provides a SQL Server instance for testing.
 /// Startup SQL Server docker container, create a database, and run migrations.
 /// </summary>
-public class SqlServerFixture : IFixture, IAsyncDisposable
+public class SqlServerFixture : IAsyncLifetime
 {
     private readonly MsSqlContainer _sqlContainer;
     private const string DATABASE_PASSWORD = "yourStrong(!)Password";
@@ -30,7 +30,7 @@ public class SqlServerFixture : IFixture, IAsyncDisposable
         return builder.ConnectionString;
     }
 
-    public async Task StartAsync()
+    public async Task InitializeAsync()
     {
         await _sqlContainer.StartAsync();
         await InitializeDatabaseAsync();
@@ -61,7 +61,7 @@ public class SqlServerFixture : IFixture, IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public async Task DisposeAsync()
     {
         await _sqlContainer.StopAsync();
         await _sqlContainer.DisposeAsync();
